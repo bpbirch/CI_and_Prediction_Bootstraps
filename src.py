@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import pickle
 #%%
-def bootStrapParamCI(df, features, target, sampleSize=None, confLevel=.9, nBootStraps=100, displayPlot=False, model=None):
+def bootStrapParamCI(df, features, target, sampleSize=None, confLevel=.9, nBootStraps=100, displayPlot=False, figsize=(5,5), model=None):
     """
     bootStrapParamCI will run bootstrap a linear regression model nBootStraps times with n = sampleSize, and confidence level = confLevel
     If displayPlot==True and a model parameter is specified, then the coefficients from that model will be plotted on the CI plot that is printed
@@ -28,6 +28,7 @@ def bootStrapParamCI(df, features, target, sampleSize=None, confLevel=.9, nBootS
         confLevel (float, optional): confidence level. Defaults to .9.
         nBootStraps (int, optional): number of bootstraps to be run. feature coefficients are estimated for each bootstrap. Defaults to 100.
         displayPlot (bool, optional): if True, then a matplotlib histogram will be displayed for each coefficient CI when bootStrapParamCI is called. Defaults to False.
+        figsize (tuple): figsize to be used in matplotlib histogram
         model (sklearn.linear_model.LinearRegression(), optional): model whose parameters you can compare to bootstrapped models. Defaults to None.
 
     Raises:
@@ -58,15 +59,16 @@ def bootStrapParamCI(df, features, target, sampleSize=None, confLevel=.9, nBootS
     for feature in features:
         coeffDict[feature] = [] #initialize an empty list for each feature parameter
     for _ in range(nBootStraps):
-        sampleDf = pd.DataFrame(columns=fullData)
+        sampleDf = pd.DataFrame(columns=fullData) # initialize an empty dataframe with columns
         for i in range(sampleSize):
-            sampleDf.loc[i] = fullDf.iloc[np.random.randint(0, len(fullDf.index)-1)] # .index will be 1 longer than .iloc
+            sampleDf.loc[i] = fullDf.iloc[np.random.randint(0, len(fullDf.index)-1)] 
+            # .index will be 1 longer than .iloc, so subtract 1 so we don't end up out of range
         # now create a model for that sampleDf and record the parameter vals
         model = LinearRegression()
         model.fit(sampleDf[features], sampleDf[target])
         for feature, coef in zip(features, model.coef_):
             coeffDict[feature].append(coef) # now append coefficients to coeffDict
-    for listOfCoefs in coeffDict: 
+    for listOfCoefs in coeffDict: # listOfCoefs is a string / key
         coefDf = pd.DataFrame(coeffDict[listOfCoefs], columns=[listOfCoefs])
         low = coefDf[listOfCoefs].quantile(lowQuantile)
         high = coefDf[listOfCoefs].quantile(highQuantile)
@@ -109,3 +111,79 @@ if __name__ == '__main__':
     print(confIntDict)
     # we can see that with sample size of n=100, only BldgGrade and SqFtTotLiving are statistically significant,
     # (meaning 0 falls within the CI of the other coefficients)
+
+#%%
+def bootStrapPredictInterval(df, features, target, predictVector, intervalLevel=.9, sampleSize=None, nBootStraps=100, displayPlot=True, figsize=(5,5)):
+    """
+    bootStrapPredictionInterval will take an argued dataframe, a target, a list of features, and will
+    then take nBootStraps number of bootstraps from the data, fit a linear regression for each bootstrap,
+    predict a target value based on predictVector input, plus some a random error from the model,
+    and then find a prediction interval for the target value, based on input predicVector.
+    If displayPlot==True, then a matplotlib histogram will be displayed, along with prediction interval and
+    mean predicted value from the bootstrapped models.
+
+    Args:
+        df (pd.DataFrame): pd DataFrame 
+        features (list): list of dataframe featuresm, in form of strings
+        target (str): target variable to regress on features
+        sampleSize (int, optional): sample size to draw for each bootstrap. Defaults to None.
+        intervalLevel (float, optional): confidence level. Defaults to .9.
+        nBootStraps (int, optional): number of bootstraps to be run. feature coefficients are estimated for each bootstrap. Defaults to 100.
+        displayPlot (bool, optional): if True, then a matplotlib histogram will be displayed for frequency of predicted target values, along with mean predicted target value
+        figsize (tuple): figsize to be used in matplotlib histogram
+        
+    Raises:
+        ValueError: confidence interval cannot be larger than 1
+        ValueError: length of input vector (predictVector) must be same as lengh of feature vector / list
+
+    Returns:
+        predictionDict (dict): dictionary containing mean prediction target value and prediction interval,
+                                in form {'meanPrediction': np.mean(predictions), 
+                                'PredictionInterval': (lowerquantile, higherquantile)}
+    """
+    if intervalLevel > 1:
+        raise ValueError('prediction (confidence level) cannot be higher than 1')
+    if len(predictVector) != len(features):
+        raise ValueError('predictVector length must equal features length')
+    fullData = [target] + features
+    fullDf = df[fullData].copy()
+    # now draw random records from our df sampleSize time:
+    predictions = []
+    lowQuantile = (1-intervalLevel)/2
+    highQuantile = intervalLevel + (1-intervalLevel)/2
+    for _ in range(nBootStraps):
+        sampleDf = pd.DataFrame(columns=fullData)
+        for i in range(sampleSize):
+            sampleDf.loc[i] = fullDf.iloc[np.random.randint(0, len(fullDf.index)-1)] 
+        model = LinearRegression()
+        model.fit(sampleDf[features], sampleDf[target])
+        predicted = model.predict([predictVector])
+        randomNum = np.random.randint(0, len(fullDf.index)-1)
+        randomError = (fullDf[target].iloc[randomNum] - model.predict([fullDf[features].iloc[randomNum]]))[0] # predict returns a list actually, so take index 0
+        predictedPlusError = predicted + randomError 
+        predictions.append(predictedPlusError)
+    predDf = pd.DataFrame(predictions, columns=['predictions'])
+    low = predDf['predictions'].quantile(lowQuantile)
+    high = predDf['predictions'].quantile(highQuantile)
+    predictionDict = {'meanPrediction': np.mean(predictions), 
+                        'PredictionInterval': (low, high)}
+    if displayPlot:
+        ax = predDf['predictions'].plot.hist(color='gray')
+        ax.set_xlabel(f'predictions with random error')
+        ax.set_ylabel('frequency')
+        ax.axvline(low, label=f'prediction interval for {intervalLevel} level', color='red')
+        ax.axvline(high, color='red')
+        ax.axvline(np.mean(predictions), label = 'mean prediction', color='green')
+        plt.show()
+    return predictionDict
+
+if __name__ == '__main__':
+    # test on housing data again
+    df = pd.read_csv('https://raw.githubusercontent.com/gedeck/practical-statistics-for-data-scientists/master/data/house_sales.csv',
+            delim_whitespace=True)
+    features = ['SqFtTotLiving', 'SqFtLot', 'Bathrooms', 'Bedrooms', 'BldgGrade']
+    target = 'AdjSalePrice'
+    fullData = [target] + features
+    df1 = df[fullData].copy()   
+    predObject = bootStrapPredictInterval(df1, features, target, df1[features].iloc[20].values, sampleSize=100, displayPlot=True)
+    print(predObject)
