@@ -42,7 +42,7 @@ def bootStrapParamCI(df, features, target, sampleSize=None, confLevel=.9, nBootS
                         included in a final model after running these bootstraps.
     """
     if confLevel > 1:
-        raise ValueError('confidence level cannot be higher than 100')
+        raise ValueError('confidence level cannot be higher than 1')
     fullData = [target] + features
     fullDf = df[fullData].copy()
     # now draw random records from our df sampleSize time:
