@@ -41,7 +41,7 @@ def bootStrapParamCI(df, features, target, sampleSize=None, confLevel=.9, nBootS
                         The idea of the 'significant' key is that it can be used to determine if a parameter gets 
                         included in a final model after running these bootstraps.
     """
-    if confLevel > 100:
+    if confLevel > 1:
         raise ValueError('confidence level cannot be higher than 100')
     fullData = [target] + features
     fullDf = df[fullData].copy()
