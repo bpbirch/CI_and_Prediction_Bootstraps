@@ -51,9 +51,9 @@ def bootStrapParamCI(df, features, target, sampleSize=None, confLevel=.9, nBootS
     ciDict = {}
     lowQuantile = (1-confLevel)/2
     highQuantile = confLevel + (1-confLevel)/2
-    if displayPlot:
-        fig, ax = plt.subplots(1,len(features)) # if display==True, we will display plots of confidence intervals for parameters
-        axIndex = 0
+    # if displayPlot:
+    #     fig, ax = plt.subplots(1,len(features)) # if display==True, we will display plots of confidence intervals for parameters
+    axIndex = 0
     if sampleSize == None:
         sampleSize = len(df.index)
     for feature in features:
@@ -73,21 +73,20 @@ def bootStrapParamCI(df, features, target, sampleSize=None, confLevel=.9, nBootS
         low = coefDf[listOfCoefs].quantile(lowQuantile)
         high = coefDf[listOfCoefs].quantile(highQuantile)
         if displayPlot:
-            ax[axIndex] = coefDf.plot.hist(color='gray')
-            ax[axIndex].set_xlabel(f'{listOfCoefs} parameter estimates')
-            ax[axIndex].axvline(low, color='red', label=f'{confLevel} conf level bounds')
-            ax[axIndex].axvline(high, color='red')
+            ax = coefDf.plot.hist(color='gray', figsize=figsize)
+            ax.set_xlabel(f'{listOfCoefs} parameter estimates')
+            ax.axvline(low, color='red', label=f'{confLevel} conf level bounds')
+            ax.axvline(high, color='red')
             if model:
-                ax[axIndex].axvline(model.coef_[axIndex], label=f'input model coef estimate for {listOfCoefs}', color='green')
+                ax.axvline(model.coef_[axIndex], label=f'input model coef estimate for {listOfCoefs}', color='green')
             else:
-                ax[axIndex].axvline(np.mean(coeffDict[listOfCoefs]), label=f'mean coef estimate for {listOfCoefs}', color='green')
-            ax[axIndex].legend()
+                ax.axvline(np.mean(coeffDict[listOfCoefs]), label=f'mean coef estimate for {listOfCoefs}', color='green')
+            ax.legend()
+            plt.show()
             axIndex += 1
         ciDict[listOfCoefs] = {'meanCoef':np.mean(coeffDict[listOfCoefs]),
                                 'CI': (low, high),
                                 'significant': not low <= 0 <= high} # if 0 is in CI, then param is not significant
-    # if displayPlot:
-    #     plt.show()
     return ciDict
 
 if __name__ == '__main__':
@@ -107,8 +106,8 @@ if __name__ == '__main__':
     # let's fit one individual model
     houseModel = LinearRegression()
     houseModel.fit(df1[features], df1[target]) # weight our model based on age of data
-    confIntDict = bootStrapParamCI(df1, features, target, sampleSize=100, displayPlot=True, model=houseModel)
-    print(confIntDict)
+    confIntDict = bootStrapParamCI(df1, features, target, sampleSize=20, displayPlot=True, figsize=(7,7), model=houseModel)
+    print('confidence interval dictionary:', confIntDict)
     # we can see that with sample size of n=100, only BldgGrade and SqFtTotLiving are statistically significant,
     # (meaning 0 falls within the CI of the other coefficients)
 
@@ -168,7 +167,7 @@ def bootStrapPredictInterval(df, features, target, predictVector, intervalLevel=
     predictionDict = {'meanPrediction': np.mean(predictions), 
                         'PredictionInterval': (low, high)}
     if displayPlot:
-        ax = predDf['predictions'].plot.hist(color='gray')
+        ax = predDf['predictions'].plot.hist(color='gray', figsize=figsize)
         ax.set_xlabel(f'predictions with random error')
         ax.set_ylabel('frequency')
         ax.axvline(low, label=f'prediction interval for {intervalLevel} level', color='red')
@@ -185,5 +184,5 @@ if __name__ == '__main__':
     target = 'AdjSalePrice'
     fullData = [target] + features
     df1 = df[fullData].copy()   
-    predObject = bootStrapPredictInterval(df1, features, target, df1[features].iloc[20].values, sampleSize=100, displayPlot=True)
+    predObject = bootStrapPredictInterval(df1, features, target, df1[features].iloc[20].values, sampleSize=20, displayPlot=True, figsize=(10,10))
     print(predObject)
